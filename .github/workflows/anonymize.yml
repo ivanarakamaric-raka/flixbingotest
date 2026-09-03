@@ -1,0 +1,17 @@
+name: Nightly GDPR anonymization
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  anonymize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call anonymize endpoint
+        run: |
+          curl -X POST \
+            -H "x-api-key: ${{ secrets.ANONYMIZE_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            ${{ secrets.RAILWAY_APP_URL }}/api/admin/anonymize
