@@ -1,11 +1,11 @@
-import { auth } from '@/lib/auth'
+import { getSession } from '@/lib/session'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CardClient } from './CardClient'
 
 export default async function CardPage() {
-  const session = await auth()
-  if (!session?.user?.email) redirect('/join')
+  const session = await getSession()
+  if (!session) redirect('/join')
 
   const supabase = await createClient()
 
@@ -17,7 +17,7 @@ export default async function CardPage() {
   if (!game) redirect('/')
 
   const { data: player } = await supabase
-    .from('players').select('id, name').eq('email', session.user.email).single()
+    .from('players').select('id, name').eq('id', session.user.id).single()
   if (!player) redirect('/')
 
   const { data: cardRows } = await supabase

@@ -35,8 +35,7 @@ create table groups (
 -- Players (one row per person)
 create table players (
   id uuid primary key default gen_random_uuid(),
-  email text unique not null,
-  name text not null,
+  name text unique not null,
   group_id uuid references groups(id),
   created_at timestamptz default now()
 );

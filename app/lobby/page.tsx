@@ -1,11 +1,11 @@
-import { auth } from '@/lib/auth'
+import { getSession } from '@/lib/session'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { LobbyClient } from './LobbyClient'
 
 export default async function LobbyPage() {
-  const session = await auth()
-  if (!session?.user?.email) redirect('/join')
+  const session = await getSession()
+  if (!session) redirect('/join')
 
   const supabase = await createClient()
 
@@ -20,13 +20,6 @@ export default async function LobbyPage() {
   if (!game) redirect('/')
   if (game.status === 'live') redirect('/card')
 
-  const { data: player } = await supabase
-    .from('players')
-    .select('id')
-    .eq('email', session.user.email)
-    .single()
-
-  // Count ready players (distinct players who have submitted truths for this game)
   const { data: readyPlayers } = await supabase
     .from('player_truths')
     .select('player_id')
@@ -34,18 +27,17 @@ export default async function LobbyPage() {
 
   const readyCount = new Set(readyPlayers?.map(r => r.player_id) ?? []).size
 
-  // Count player's own truths
   const { count: myTruthCount } = await supabase
     .from('player_truths')
     .select('*', { count: 'exact', head: true })
-    .eq('player_id', player?.id ?? '')
+    .eq('player_id', session.user.id)
     .eq('game_id', game.id)
 
   return (
     <LobbyClient
       gameId={game.id}
       gameName={game.name}
-      playerId={player?.id ?? ''}
+      playerId={session.user.id}
       readyCount={readyCount}
       myTruthCount={myTruthCount ?? 0}
     />

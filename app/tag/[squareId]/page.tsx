@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+import { getSession } from '@/lib/session'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { TagClient } from './TagClient'
@@ -10,8 +10,8 @@ export default async function TagPage({
   params: Promise<{ squareId: string }>
   searchParams: Promise<{ game?: string }>
 }) {
-  const session = await auth()
-  if (!session?.user?.email) redirect('/join')
+  const session = await getSession()
+  if (!session) redirect('/join')
 
   const { squareId } = await params
   const { game: gameId } = await searchParams

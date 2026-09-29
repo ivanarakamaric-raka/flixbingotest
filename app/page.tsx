@@ -1,14 +1,13 @@
-import { auth } from '@/lib/auth'
+import { getSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function RootPage() {
-  const session = await auth()
-  if (!session?.user?.email) redirect('/join')
+  const session = await getSession()
+  if (!session) redirect('/join')
 
   const supabase = await createClient()
 
-  // Find live game
   const { data: game } = await supabase
     .from('games')
     .select('id, status')
@@ -25,20 +24,10 @@ export default async function RootPage() {
     )
   }
 
-  // Find player record
-  const { data: player } = await supabase
-    .from('players')
-    .select('id')
-    .eq('email', session.user.email)
-    .single()
-
-  if (!player) redirect(`/profile?game=${game.id}`)
-
-  // Check if truth profile exists
   const { count } = await supabase
     .from('player_truths')
     .select('*', { count: 'exact', head: true })
-    .eq('player_id', player.id)
+    .eq('player_id', session.user.id)
     .eq('game_id', game.id)
 
   if (!count || count === 0) redirect(`/profile?game=${game.id}`)

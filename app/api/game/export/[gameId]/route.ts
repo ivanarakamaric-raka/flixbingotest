@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+import { getSession } from '@/lib/session'
 import { adminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -6,9 +6,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ gameId: string }> }
 ) {
-  const session = await auth()
-  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim())
-  if (!session?.user?.email || !adminEmails.includes(session.user.email)) {
+  const session = await getSession()
+  const adminIds = (process.env.ADMIN_PLAYER_IDS ?? '').split(',').map(id => id.trim())
+  if (!session || !adminIds.includes(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
