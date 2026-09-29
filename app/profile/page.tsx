@@ -1,5 +1,5 @@
+import { db } from '@/lib/db'
 import { getSession } from '@/lib/session'
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { ProfileForm } from './ProfileForm'
 
@@ -15,28 +15,23 @@ export default async function ProfilePage({
   const gameId = params.game
   if (!gameId) redirect('/')
 
-  const supabase = await createClient()
+  const d = db()
 
-  const { data: gameQuestions } = await supabase
-    .from('game_questions')
-    .select('question_id, questions(id, text, category)')
-    .eq('game_id', gameId)
-    .order('position')
+  const questions = d.prepare(
+    `SELECT q.id, q.text, q.category FROM game_questions gq
+     JOIN questions q ON q.id = gq.question_id
+     WHERE gq.game_id = ? ORDER BY gq.position`
+  ).all(gameId) as { id: string; text: string; category: string }[]
 
-  const { data: existingTruths } = await supabase
-    .from('player_truths')
-    .select('question_id')
-    .eq('player_id', session.user.id)
-    .eq('game_id', gameId)
-
-  const trueBefore = existingTruths?.map(t => t.question_id) ?? []
-  const questions = gameQuestions?.map(gq => gq.questions).filter(Boolean) ?? []
+  const trueBefore = (d.prepare(
+    `SELECT question_id FROM player_truths WHERE player_id = ? AND game_id = ?`
+  ).all(session.user.id, gameId) as { question_id: string }[]).map(r => r.question_id)
 
   return (
     <ProfileForm
       playerId={session.user.id}
       gameId={gameId}
-      questions={questions as any}
+      questions={questions}
       trueBefore={trueBefore}
     />
   )

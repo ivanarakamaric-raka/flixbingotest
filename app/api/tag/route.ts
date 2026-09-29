@@ -1,12 +1,10 @@
+import { db } from '@/lib/db'
 import { getSession } from '@/lib/session'
-import { adminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
   const session = await getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { scannedPlayerId, squareQuestionId, gameId } = await req.json()
   const taggerId = session.user.id
@@ -15,61 +13,47 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'You cannot tag yourself' }, { status: 400 })
   }
 
-  const { data: existingUse } = await adminClient()
-    .from('player_cards')
-    .select('question_id')
-    .eq('player_id', taggerId)
-    .eq('game_id', gameId)
-    .eq('claimed_by_player_id', scannedPlayerId)
-    .not('claimed_at', 'is', null)
-    .limit(1)
+  const d = db()
 
-  if (existingUse && existingUse.length > 0) {
+  const existingUse = d.prepare(
+    `SELECT 1 FROM player_cards
+     WHERE player_id = ? AND game_id = ? AND claimed_by_player_id = ? AND claimed_at IS NOT NULL
+     LIMIT 1`
+  ).get(taggerId, gameId, scannedPlayerId)
+
+  if (existingUse) {
     return NextResponse.json({ error: 'already_used', message: 'You already used this person on your card' }, { status: 400 })
   }
 
-  const { data: truth } = await adminClient()
-    .from('player_truths')
-    .select('question_id')
-    .eq('player_id', scannedPlayerId)
-    .eq('game_id', gameId)
-    .eq('question_id', squareQuestionId)
-    .single()
+  const truth = d.prepare(
+    `SELECT 1 FROM player_truths WHERE player_id = ? AND game_id = ? AND question_id = ?`
+  ).get(scannedPlayerId, gameId, squareQuestionId)
 
   if (!truth) {
-    const { data: scannedPlayer } = await adminClient()
-      .from('players').select('name').eq('id', scannedPlayerId).single()
+    const scannedPlayer = d.prepare(`SELECT name FROM players WHERE id = ?`).get(scannedPlayerId) as { name: string } | undefined
+    const firstName = scannedPlayer?.name?.split(' ')[0] ?? 'them'
     return NextResponse.json({
       error: 'no_match',
-      message: `This square isn't true for ${scannedPlayer?.name?.split(' ')[0] ?? 'them'}`,
-      scannedName: scannedPlayer?.name?.split(' ')[0] ?? 'them',
+      message: `This square isn't true for ${firstName}`,
+      scannedName: firstName,
     }, { status: 400 })
   }
 
-  const { error } = await adminClient()
-    .from('player_cards')
-    .update({ claimed_at: new Date().toISOString(), claimed_by_player_id: scannedPlayerId })
-    .eq('player_id', taggerId)
-    .eq('game_id', gameId)
-    .eq('question_id', squareQuestionId)
+  d.prepare(
+    `UPDATE player_cards SET claimed_at = ?, claimed_by_player_id = ?
+     WHERE player_id = ? AND game_id = ? AND question_id = ?`
+  ).run(new Date().toISOString(), scannedPlayerId, taggerId, gameId, squareQuestionId)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const { claimed } = d.prepare(
+    `SELECT COUNT(*) as claimed FROM player_cards
+     WHERE player_id = ? AND game_id = ? AND claimed_at IS NOT NULL`
+  ).get(taggerId, gameId) as { claimed: number }
 
-  const { count } = await adminClient()
-    .from('player_cards')
-    .select('*', { count: 'exact', head: true })
-    .eq('player_id', taggerId)
-    .eq('game_id', gameId)
-    .not('claimed_at', 'is', null)
-
-  const isBingo = (count ?? 0) >= 16
-
-  const { data: scannedPlayer } = await adminClient()
-    .from('players').select('name').eq('id', scannedPlayerId).single()
+  const scannedPlayer = d.prepare(`SELECT name FROM players WHERE id = ?`).get(scannedPlayerId) as { name: string } | undefined
 
   return NextResponse.json({
     success: true,
-    bingo: isBingo,
+    bingo: claimed >= 16,
     scannedName: scannedPlayer?.name?.split(' ')[0] ?? '',
   })
 }

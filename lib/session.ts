@@ -50,3 +50,10 @@ export async function clearSession(): Promise<void> {
   const jar = await cookies()
   jar.delete(COOKIE_NAME)
 }
+
+export async function isAdmin(): Promise<boolean> {
+  const session = await getSession()
+  if (!session) return false
+  const adminIds = (process.env.ADMIN_PLAYER_IDS ?? '').split(',').map(id => id.trim()).filter(Boolean)
+  return adminIds.includes(session.user.id)
+}

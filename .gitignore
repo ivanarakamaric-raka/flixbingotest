@@ -22,9 +22,8 @@ yarn-error.log*
 # Environment — never commit secrets
 .env*
 
-# Supabase
-/supabase/.branches
-/supabase/.temp
+# SQLite local database
+/data/
 
 # Nightly backup artifacts — created at runtime, not tracked
 /backups/*.json

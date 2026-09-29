@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { isAdmin } from '@/lib/session'
+import { redirect } from 'next/navigation'
 
 const tabs = [
   { href: '/admin/scoreboard', label: 'Scoreboard' },
@@ -7,7 +9,8 @@ const tabs = [
   { href: '/admin/players', label: 'Players' },
 ]
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  if (!await isAdmin()) redirect('/')
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <header className="bg-[#111] border-b border-[#2a2a2a] px-6 py-4 flex items-center justify-between sticky top-0 z-10">

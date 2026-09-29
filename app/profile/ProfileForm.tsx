@@ -1,7 +1,6 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
 type Question = { id: string; text: string; category: string }
 
@@ -30,26 +29,11 @@ export function ProfileForm({
 
   async function save() {
     setSaving(true)
-    const supabase = createClient()
-
-    // Delete old truths for this game
-    await supabase
-      .from('player_truths')
-      .delete()
-      .eq('player_id', playerId)
-      .eq('game_id', gameId)
-
-    // Insert new truths
-    if (selected.size > 0) {
-      await supabase.from('player_truths').insert(
-        Array.from(selected).map(question_id => ({
-          player_id: playerId,
-          game_id: gameId,
-          question_id,
-        }))
-      )
-    }
-
+    await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, gameId, questionIds: Array.from(selected) }),
+    })
     router.push('/lobby')
   }
 

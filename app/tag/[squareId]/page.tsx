@@ -1,5 +1,5 @@
+import { db } from '@/lib/db'
 import { getSession } from '@/lib/session'
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { TagClient } from './TagClient'
 
@@ -16,9 +16,7 @@ export default async function TagPage({
   const { squareId } = await params
   const { game: gameId } = await searchParams
 
-  const supabase = await createClient()
-  const { data: question } = await supabase
-    .from('questions').select('text').eq('id', squareId).single()
+  const question = db().prepare(`SELECT text FROM questions WHERE id = ?`).get(squareId) as { text: string } | undefined
 
   return (
     <TagClient

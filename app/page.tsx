@@ -1,20 +1,15 @@
+import { db } from '@/lib/db'
 import { getSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 
 export default async function RootPage() {
   const session = await getSession()
   if (!session) redirect('/join')
 
-  const supabase = await createClient()
-
-  const { data: game } = await supabase
-    .from('games')
-    .select('id, status')
-    .in('status', ['lobby', 'live'])
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
+  const d = db()
+  const game = d.prepare(
+    `SELECT id, status FROM games WHERE status IN ('lobby','live') ORDER BY created_at DESC LIMIT 1`
+  ).get() as { id: string; status: string } | undefined
 
   if (!game) {
     return (
@@ -24,14 +19,11 @@ export default async function RootPage() {
     )
   }
 
-  const { count } = await supabase
-    .from('player_truths')
-    .select('*', { count: 'exact', head: true })
-    .eq('player_id', session.user.id)
-    .eq('game_id', game.id)
+  const { n } = d.prepare(
+    `SELECT COUNT(*) as n FROM player_truths WHERE player_id = ? AND game_id = ?`
+  ).get(session.user.id, game.id) as { n: number }
 
-  if (!count || count === 0) redirect(`/profile?game=${game.id}`)
-
+  if (n === 0) redirect(`/profile?game=${game.id}`)
   if (game.status === 'lobby') redirect('/lobby')
   redirect('/card')
 }

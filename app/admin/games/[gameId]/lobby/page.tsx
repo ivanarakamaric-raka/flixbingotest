@@ -1,5 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
-import { adminClient } from '@/lib/supabase/admin'
+import { db } from '@/lib/db'
 import { LobbyAdminClient } from './LobbyAdminClient'
 
 export const dynamic = 'force-dynamic'
@@ -10,34 +9,34 @@ export default async function GameLobbyPage({
   params: Promise<{ gameId: string }>
 }) {
   const { gameId } = await params
-  const supabase = await createClient()
+  const d = db()
 
-  const { data: game } = await supabase
-    .from('games').select('id, name, status').eq('id', gameId).single()
+  const game = d.prepare(
+    `SELECT id, name, status FROM games WHERE id = ?`
+  ).get(gameId) as { id: string; name: string; status: string } | undefined
 
-  const { data: readyPlayerIds } = await adminClient()
-    .from('player_truths')
-    .select('player_id')
-    .eq('game_id', gameId)
+  if (!game) return <div className="p-8 text-gray-500 text-sm">Game not found.</div>
 
-  const readyIds = new Set((readyPlayerIds ?? []).map(r => r.player_id))
-  const readyCount = readyIds.size
+  const readyRows = d.prepare(
+    `SELECT DISTINCT player_id FROM player_truths WHERE game_id = ?`
+  ).all(gameId) as { player_id: string }[]
 
-  const { data: allPlayers } = await adminClient()
-    .from('players').select('id, name, email, created_at')
+  const readyIds = new Set(readyRows.map(r => r.player_id))
 
-  const totalPlayers = (allPlayers ?? []).length
+  const allPlayers = d.prepare(
+    `SELECT id, name FROM players ORDER BY created_at`
+  ).all() as { id: string; name: string }[]
 
-  const playersWithStatus = (allPlayers ?? []).map(p => ({
+  const playersWithStatus = allPlayers.map(p => ({
     ...p,
     status: readyIds.has(p.id) ? 'ready' : 'joined',
   }))
 
   return (
     <LobbyAdminClient
-      game={game!}
-      readyCount={readyCount}
-      totalPlayers={totalPlayers}
+      game={game}
+      readyCount={readyIds.size}
+      totalPlayers={allPlayers.length}
       players={playersWithStatus}
     />
   )

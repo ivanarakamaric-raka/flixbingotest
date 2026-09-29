@@ -1,5 +1,5 @@
+import { db } from '@/lib/db'
 import { getSession } from '@/lib/session'
-import { adminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(
@@ -13,24 +13,18 @@ export async function GET(
   }
 
   const { gameId } = await params
+  const d = db()
 
-  const { data: game } = await adminClient()
-    .from('games').select('*').eq('id', gameId).single()
+  const game = d.prepare(`SELECT * FROM games WHERE id = ?`).get(gameId)
+  const analytics = d.prepare(`SELECT * FROM game_analytics WHERE game_id = ?`).get(gameId)
+  const stats = d.prepare(`SELECT * FROM player_game_stats WHERE game_id = ?`).all(gameId)
+  const questions = d.prepare(
+    `SELECT gq.position, q.text, q.category
+     FROM game_questions gq JOIN questions q ON q.id = gq.question_id
+     WHERE gq.game_id = ? ORDER BY gq.position`
+  ).all(gameId)
 
-  const { data: analytics } = await adminClient()
-    .from('game_analytics').select('*').eq('game_id', gameId).single()
-
-  const { data: stats } = await adminClient()
-    .from('player_game_stats').select('*').eq('game_id', gameId)
-
-  const { data: questions } = await adminClient()
-    .from('game_questions')
-    .select('position, questions(text, category)')
-    .eq('game_id', gameId)
-    .order('position')
-
-  const exportData = { game, questions, analytics, playerStats: stats }
-  const json = JSON.stringify(exportData, null, 2)
+  const json = JSON.stringify({ game, questions, analytics, playerStats: stats }, null, 2)
 
   return new NextResponse(json, {
     headers: {

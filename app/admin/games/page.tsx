@@ -1,12 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
+import { db } from '@/lib/db'
 import Link from 'next/link'
 
 export default async function GamesPage() {
-  const supabase = await createClient()
-  const { data: games } = await supabase
-    .from('games')
-    .select('id, name, status, played_at')
-    .order('created_at', { ascending: false })
+  const games = db().prepare(
+    `SELECT id, name, status, played_at FROM games ORDER BY created_at DESC`
+  ).all() as { id: string; name: string; status: string; played_at: string | null }[]
 
   return (
     <div className="max-w-3xl mx-auto p-6">
@@ -14,7 +12,7 @@ export default async function GamesPage() {
         <h2 className="text-base font-bold text-white">Games</h2>
       </div>
       <div className="flex flex-col gap-2">
-        {(games ?? []).map(game => (
+        {games.map(game => (
           <div key={game.id} className="bg-[#161616] border border-[#2a2a2a] rounded-xl px-5 py-4 flex items-center gap-4">
             <div className="flex-1">
               <div className="text-sm font-semibold text-white">{game.name}</div>
@@ -37,7 +35,7 @@ export default async function GamesPage() {
             )}
           </div>
         ))}
-        {(games ?? []).length === 0 && (
+        {games.length === 0 && (
           <div className="text-gray-600 text-sm text-center py-8">No games yet. Create one in the database.</div>
         )}
       </div>

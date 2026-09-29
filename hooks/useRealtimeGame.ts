@@ -1,27 +1,21 @@
 'use client'
 import { useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
 export function useRealtimeGame(gameId: string) {
   const router = useRouter()
 
   useEffect(() => {
-    const supabase = createClient()
+    async function poll() {
+      const res = await fetch(`/api/game-status/${gameId}`)
+      if (res.ok) {
+        const { status } = await res.json()
+        if (status === 'live') router.push('/card')
+      }
+    }
 
-    const channel = supabase
-      .channel(`game:${gameId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameId}` },
-        (payload) => {
-          if (payload.new.status === 'live') {
-            router.push('/card')
-          }
-        }
-      )
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    poll()
+    const id = setInterval(poll, 3000)
+    return () => clearInterval(id)
   }, [gameId, router])
 }

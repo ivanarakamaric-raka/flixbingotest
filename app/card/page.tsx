@@ -1,5 +1,5 @@
+import { db } from '@/lib/db'
 import { getSession } from '@/lib/session'
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CardClient } from './CardClient'
 
@@ -7,38 +7,32 @@ export default async function CardPage() {
   const session = await getSession()
   if (!session) redirect('/join')
 
-  const supabase = await createClient()
-
-  const { data: game } = await supabase
-    .from('games').select('id, name, status')
-    .eq('status', 'live').order('created_at', { ascending: false })
-    .limit(1).single()
-
+  const d = db()
+  const game = d.prepare(
+    `SELECT id, name, status FROM games WHERE status = 'live' ORDER BY created_at DESC LIMIT 1`
+  ).get() as { id: string; name: string; status: string } | undefined
   if (!game) redirect('/')
 
-  const { data: player } = await supabase
-    .from('players').select('id, name').eq('id', session.user.id).single()
+  const player = d.prepare(`SELECT id, name FROM players WHERE id = ?`).get(session.user.id) as { id: string; name: string } | undefined
   if (!player) redirect('/')
 
-  const { data: cardRows } = await supabase
-    .from('player_cards')
-    .select(`
-      question_id, position, claimed_at,
-      questions(text),
-      claimed_player:players!player_cards_claimed_by_player_id_fkey(name)
-    `)
-    .eq('player_id', player.id)
-    .eq('game_id', game.id)
-    .order('position')
+  const cardRows = d.prepare(
+    `SELECT pc.question_id, pc.position, pc.claimed_at, q.text, p.name as claimer_name
+     FROM player_cards pc
+     JOIN questions q ON q.id = pc.question_id
+     LEFT JOIN players p ON p.id = pc.claimed_by_player_id
+     WHERE pc.player_id = ? AND pc.game_id = ?
+     ORDER BY pc.position`
+  ).all(player.id, game.id) as {
+    question_id: string; position: number; claimed_at: string | null; text: string; claimer_name: string | null
+  }[]
 
-  const squares = (cardRows ?? []).map(row => ({
+  const squares = cardRows.map(row => ({
     questionId: row.question_id,
-    text: (row.questions as any)?.text ?? '',
+    text: row.text,
     claimedAt: row.claimed_at,
-    claimedByName: (row.claimed_player as any)?.name?.split(' ')[0] ?? null,
+    claimedByName: row.claimer_name?.split(' ')[0] ?? null,
   }))
-
-  const claimedCount = squares.filter(s => s.claimedAt).length
 
   return (
     <CardClient
@@ -46,7 +40,7 @@ export default async function CardPage() {
       playerName={player.name}
       gameId={game.id}
       squares={squares}
-      claimedCount={claimedCount}
+      claimedCount={squares.filter(s => s.claimedAt).length}
     />
   )
 }

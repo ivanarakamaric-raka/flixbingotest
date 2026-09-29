@@ -1,6 +1,5 @@
 'use client'
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 
 type Question = { id: string; text: string; category: string; usedCount: number }
 
@@ -38,24 +37,24 @@ export function LibraryClient({ questions, gameId }: { questions: Question[]; ga
   async function saveSelection() {
     if (!gameId || selected.size !== 20) return
     setSaving(true)
-    const supabase = createClient()
-    await supabase.from('game_questions').delete().eq('game_id', gameId)
-    await supabase.from('game_questions').insert(
-      Array.from(selected).map((question_id, i) => ({ game_id: gameId, question_id, position: i + 1 }))
-    )
+    await fetch('/api/game-questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameId, questionIds: Array.from(selected) }),
+    })
     setSaving(false)
     alert('Questions saved for this game!')
   }
 
   async function addQuestion() {
     if (!newText.trim()) return
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('questions')
-      .insert({ text: newText.trim(), category: newCategory })
-      .select('id, text, category')
-      .single()
-    if (data) {
+    const res = await fetch('/api/questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: newText.trim(), category: newCategory }),
+    })
+    if (res.ok) {
+      const data = await res.json()
       setAllQuestions(prev => [...prev, { ...data, usedCount: 0 }])
       setNewText('')
       setShowAddModal(false)

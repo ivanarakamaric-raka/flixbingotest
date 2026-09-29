@@ -8,7 +8,7 @@ export function LobbyAdminClient({
   game: { id: string; name: string }
   readyCount: number
   totalPlayers: number
-  players: { id: string; name: string; email: string; status: string }[]
+  players: { id: string; name: string; status: string }[]
 }) {
   const [starting, setStarting] = useState(false)
   const router = useRouter()
@@ -89,7 +89,6 @@ export function LobbyAdminClient({
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-semibold text-gray-300">{p.name}</div>
-              <div className="text-[9px] text-gray-600 truncate">{p.email}</div>
             </div>
             <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
               p.status === 'ready' ? 'bg-[#0d2010] text-[#73d13d]' : 'bg-[#1a1a2e] text-[#69b1ff]'

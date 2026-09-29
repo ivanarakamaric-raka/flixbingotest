@@ -1,14 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
+import { db } from '@/lib/db'
 import { ScoreboardClient } from './ScoreboardClient'
 
 export default async function ScoreboardPage() {
-  const supabase = await createClient()
-
-  const { data: game } = await supabase
-    .from('games').select('id, name, status, played_at')
-    .in('status', ['live', 'ended'])
-    .order('created_at', { ascending: false })
-    .limit(1).single()
+  const game = db().prepare(
+    `SELECT id, name FROM games WHERE status IN ('live','ended') ORDER BY created_at DESC LIMIT 1`
+  ).get() as { id: string; name: string } | undefined
 
   if (!game) {
     return <div className="p-8 text-gray-500 text-sm">No live game right now.</div>

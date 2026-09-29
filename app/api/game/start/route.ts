@@ -1,5 +1,5 @@
+import { db } from '@/lib/db'
 import { getSession } from '@/lib/session'
-import { adminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 
 function shuffle<T>(arr: T[]): T[] {
@@ -19,46 +19,39 @@ export async function POST(req: NextRequest) {
   }
 
   const { gameId } = await req.json()
+  const d = db()
 
-  const { data: gameQuestions } = await adminClient()
-    .from('game_questions')
-    .select('question_id')
-    .eq('game_id', gameId)
+  const gameQuestions = d.prepare(
+    `SELECT question_id FROM game_questions WHERE game_id = ?`
+  ).all(gameId) as { question_id: string }[]
 
-  if (!gameQuestions || gameQuestions.length !== 20) {
+  if (gameQuestions.length !== 20) {
     return NextResponse.json({ error: 'Game must have exactly 20 questions' }, { status: 400 })
   }
 
   const questionIds = gameQuestions.map(q => q.question_id)
+  const players = d.prepare(`SELECT id FROM players`).all() as { id: string }[]
 
-  const { data: players } = await adminClient()
-    .from('players')
-    .select('id')
+  if (!players.length) return NextResponse.json({ error: 'No players found' }, { status: 400 })
 
-  if (!players) return NextResponse.json({ error: 'No players found' }, { status: 400 })
+  const insertCard = d.prepare(
+    `INSERT INTO player_cards (player_id, game_id, question_id, position)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(player_id, game_id, question_id) DO NOTHING`
+  )
 
-  const cardInserts = players.flatMap(player => {
-    const picked = shuffle(questionIds).slice(0, 16)
-    return picked.map((question_id, index) => ({
-      player_id: player.id,
-      game_id: gameId,
-      question_id,
-      position: index + 1,
-    }))
+  const insertAll = d.transaction(() => {
+    for (const player of players) {
+      const picked = shuffle(questionIds).slice(0, 16)
+      picked.forEach((question_id, i) => insertCard.run(player.id, gameId, question_id, i + 1))
+    }
   })
 
-  const { error: insertError } = await adminClient()
-    .from('player_cards')
-    .upsert(cardInserts, { onConflict: 'player_id,game_id,question_id' })
+  insertAll()
 
-  if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 })
-
-  const { error: updateError } = await adminClient()
-    .from('games')
-    .update({ status: 'live', played_at: new Date().toISOString() })
-    .eq('id', gameId)
-
-  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+  d.prepare(
+    `UPDATE games SET status = 'live', played_at = ? WHERE id = ?`
+  ).run(new Date().toISOString(), gameId)
 
   return NextResponse.json({ success: true })
 }
